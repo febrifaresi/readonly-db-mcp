@@ -1,0 +1,9 @@
+mcp>=1.2
+sqlalchemy>=2.0
+sqlglot>=25
+python-dotenv>=1.0
+# driver - install sesuai database yang dipakai
+psycopg[binary]>=3.1      # PostgreSQL
+pymysql>=1.1              # MySQL / MariaDB
+pymssql>=2.3              # SQL Server
+oracledb>=2.0             # Oracle (thin mode, tanpa Oracle Client)

@@ -1,0 +1,15 @@
+# Rahasia & config lokal — JANGAN di-commit
+.env
+connections.toml
+audit.log
+
+# Lingkungan Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Database lokal (contoh.db bisa dibuat ulang)
+*.db
+*.sqlite
+*.sqlite3

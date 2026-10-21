@@ -1,0 +1,33 @@
+# Salin menjadi connections.toml lalu sesuaikan.
+# Kredensial TIDAK ditulis di sini — taruh di file .env (lihat .env.example).
+
+[settings]
+max_rows = 500            # batas baris per query
+timeout_seconds = 30      # batas waktu query
+max_cell_chars = 2000     # teks panjang dipotong
+# audit_log = "C:/path/ke/audit.log"   # default: audit.log di folder ini
+
+[connections.pg_dwh]
+type = "postgresql"
+url_env = "PG_DWH_URL"
+description = "Data warehouse (PostgreSQL)"
+
+[connections.mysql_app]
+type = "mysql"
+url_env = "MYSQL_APP_URL"
+description = "Database aplikasi (MySQL)"
+
+[connections.mssql_erp]
+type = "mssql"
+url_env = "MSSQL_ERP_URL"
+description = "ERP (SQL Server)"
+
+[connections.oracle_core]
+type = "oracle"
+url_env = "ORACLE_CORE_URL"
+description = "Core system (Oracle)"
+
+[connections.local_sqlite]
+type = "sqlite"
+path = "C:/path/ke/readonly-db-mcp/contoh.db"   # Windows: pakai garis miring / bukan \
+description = "File SQLite lokal"
