@@ -1,57 +1,59 @@
 # readonly-db-mcp
 
-MCP server **read-only** untuk PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, dan Oracle. Kodenya sengaja dibuat kecil, sekitar 400 baris di dua file, supaya bisa dibaca dan diaudit sendiri.
+A **read-only** MCP server for PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, and Oracle. The code is intentionally small, about 400 lines across two files, so you can read and audit it yourself.
 
-| File | Isi |
+| File | Contents |
 |---|---|
-| `server.py` | MCP server: koneksi, sesi read-only, 6 tools, audit log |
-| `sql_guard.py` | Validasi SQL: hanya **satu** statement `SELECT` |
-| `connections.toml` | Daftar koneksi (tanpa password) |
-| `.env` | Connection URL + password (jangan di-commit) |
-| `tests/` | 121 test (validator + end-to-end lewat protokol MCP) |
+| `server.py` | MCP server: connections, read-only sessions, 6 tools, audit log |
+| `sql_guard.py` | SQL validation: only **one** `SELECT` statement allowed |
+| `connections.toml` | Connection list (no passwords) |
+| `.env` | Connection URLs + passwords (never commit this) |
+| `tests/` | 121 tests (validator + end-to-end over the MCP protocol) |
 
 ## Tools
 
-| Tool | Fungsi |
+| Tool | Purpose |
 |---|---|
-| `list_connections` | Daftar koneksi yang diizinkan (tanpa kredensial) |
-| `list_schemas` | Daftar schema/database |
-| `list_tables` | Tabel & view dalam sebuah schema |
-| `describe_table` | Kolom, tipe, PK, FK, index |
-| `run_query` | Jalankan satu `SELECT`. Hasil dibatasi `max_rows`, ada flag `truncated` |
-| `explain_query` | Query plan **tanpa** menjalankan query (tidak tersedia untuk Oracle) |
+| `list_connections` | List allowed connections (no credentials) |
+| `list_schemas` | List schemas/databases |
+| `list_tables` | Tables & views in a schema |
+| `describe_table` | Columns, types, PK, FK, indexes |
+| `run_query` | Run a single `SELECT`. Results are capped at `max_rows`, with a `truncated` flag |
+| `explain_query` | Query plan **without** running the query (not available for Oracle) |
 
-## Lapisan keamanan
+## Security layers
 
-1. **User database read-only (wajib).** Ini satu-satunya pengaman yang benar-benar kuat. Lihat skrip di bawah.
-2. **Sesi read-only di level database:**
+1. **A read-only database user (required).** This is the only truly strong safeguard. See the scripts below.
+2. **Read-only session at the database level:**
    - PostgreSQL: `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`
    - MySQL: `SET SESSION TRANSACTION READ ONLY`
    - Oracle: `SET TRANSACTION READ ONLY` per query
-   - SQLite: file dibuka `mode=ro` + `PRAGMA query_only`
-   - SQL Server **tidak punya** sesi read-only, jadi di SQL Server lapisan 1 mutlak.
-3. **Validasi SQL (sqlglot, fail-closed).** Semua yang bukan `SELECT` ditolak, termasuk multi-statement, `SELECT INTO`, `FOR UPDATE`, CTE yang berisi `DELETE`, dan fungsi berbahaya seperti `pg_sleep`, `pg_terminate_backend`, `dblink`, `SLEEP`, `LOAD_FILE`, `xp_cmdshell`, `OPENROWSET`, `WAITFOR`, `DBMS_*` dan `UTL_*`.
-4. **Selalu ROLLBACK.** Ada juga timeout query (default 30 detik), batas jumlah baris (default 500), dan teks panjang dipotong.
-5. **Audit log.** Semua query, termasuk yang ditolak, dicatat di `audit.log` dalam format JSON Lines.
+   - SQLite: file opened with `mode=ro` + `PRAGMA query_only`
+   - SQL Server has **no** read-only session, so on SQL Server layer 1 is essential.
+3. **SQL validation (sqlglot, fail-closed).** Anything that is not a `SELECT` is rejected, including multiple statements, `SELECT INTO`, `FOR UPDATE`, CTEs containing `DELETE`, and dangerous functions such as `pg_sleep`, `pg_terminate_backend`, `dblink`, `SLEEP`, `LOAD_FILE`, `xp_cmdshell`, `OPENROWSET`, `WAITFOR`, `DBMS_*` and `UTL_*`.
+4. **Always ROLLBACK.** There is also a query timeout (30 seconds by default), a row limit (500 by default), and long text values are truncated.
+5. **Audit log.** Every query, including rejected ones, is logged to `audit.log` in JSON Lines format.
 
-## Instalasi cepat (Windows)
+> Note: tool descriptions and error messages from the server are currently in Indonesian.
 
-Double-click **`setup.bat`**. Script ini membuat `.venv`, menginstall dependency, menyiapkan `connections.toml` dan `.env`, lalu mendaftarkan server ke Claude Desktop. Config Claude Desktop yang lama di-backup dulu ke `claude_desktop_config.json.bak-<tanggal>`. Setelah itu edit `connections.toml` dan `.env`, lalu restart Claude Desktop.
+## Quick install (Windows)
 
-## Instalasi manual
+Double-click **`setup.bat`**. It creates `.venv`, installs dependencies, prepares `connections.toml` and `.env`, and registers the server with Claude Desktop. Your existing Claude Desktop config is backed up first to `claude_desktop_config.json.bak-<date>`. Then edit `connections.toml` and `.env`, and restart Claude Desktop.
 
-Butuh Python 3.11 ke atas.
+## Manual install
+
+Requires Python 3.11 or newer.
 
 ```bash
 cd readonly-db-mcp
 python -m venv .venv
 # Windows: .venv\Scripts\activate     macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt        # hapus driver yang tidak dipakai bila mau
+pip install -r requirements.txt        # remove drivers you don't need if you like
 cp connections.example.toml connections.toml
-cp .env.example .env                   # isi URL + password user read-only
+cp .env.example .env                   # fill in the URL + password of the read-only user
 ```
 
-Format URL koneksi (password dengan karakter `@ : / # %` harus di-URL-encode, misalnya `@` menjadi `%40`):
+Connection URL format (passwords containing `@ : / # %` must be URL-encoded, e.g. `@` becomes `%40`):
 
 ```
 postgresql+psycopg://user:pass@host:5432/dbname
@@ -60,9 +62,9 @@ mssql+pymssql://user:pass@host:1433/dbname
 oracle+oracledb://user:pass@host:1521/?service_name=ORCLPDB1
 ```
 
-SQLite tidak butuh URL. Cukup isi `path = "..."` di `connections.toml`.
+SQLite needs no URL. Just set `path = "..."` in `connections.toml` (on Windows, use forward slashes `/`).
 
-### Daftarkan ke Claude Desktop
+### Register with Claude Desktop
 
 Edit `claude_desktop_config.json`:
 
@@ -80,33 +82,33 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-Untuk macOS/Linux, `command` diisi `/path/readonly-db-mcp/.venv/bin/python`. Setelah itu restart Claude Desktop.
+On macOS/Linux, set `command` to `/path/readonly-db-mcp/.venv/bin/python`. Then restart Claude Desktop.
 
-## Membuat user read-only
+## Creating a read-only user
 
 **PostgreSQL**
 
 ```sql
-CREATE ROLE claude_ro LOGIN PASSWORD 'ganti-ini';
+CREATE ROLE claude_ro LOGIN PASSWORD 'change-me';
 ALTER ROLE claude_ro SET default_transaction_read_only = on;
 GRANT CONNECT ON DATABASE dwh TO claude_ro;
 GRANT USAGE ON SCHEMA public TO claude_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO claude_ro;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO claude_ro;
--- PG 14+: alternatif cepat untuk semua tabel -> GRANT pg_read_all_data TO claude_ro;
+-- PG 14+: quick alternative for all tables -> GRANT pg_read_all_data TO claude_ro;
 ```
 
 **MySQL / MariaDB**
 
 ```sql
-CREATE USER 'claude_ro'@'%' IDENTIFIED BY 'ganti-ini';
+CREATE USER 'claude_ro'@'%' IDENTIFIED BY 'change-me';
 GRANT SELECT, SHOW VIEW ON app.* TO 'claude_ro'@'%';
 ```
 
 **SQL Server**
 
 ```sql
-CREATE LOGIN claude_ro WITH PASSWORD = 'ganti-ini';
+CREATE LOGIN claude_ro WITH PASSWORD = 'change-me';
 USE ERP;
 CREATE USER claude_ro FOR LOGIN claude_ro;
 ALTER ROLE db_datareader ADD MEMBER claude_ro;
@@ -116,16 +118,16 @@ DENY EXECUTE TO claude_ro;
 **Oracle**
 
 ```sql
-CREATE USER claude_ro IDENTIFIED BY "ganti-ini";
+CREATE USER claude_ro IDENTIFIED BY "change-me";
 GRANT CREATE SESSION TO claude_ro;
-GRANT SELECT ON skema.nama_tabel TO claude_ro;   -- ulangi per tabel/view yang boleh dibaca
+GRANT SELECT ON schema_name.table_name TO claude_ro;   -- repeat for each table/view that may be read
 ```
 
-Untuk Oracle, tabel milik skema lain dibaca dengan mengisi parameter `schema` di tool.
+On Oracle, tables owned by another schema are read by setting the `schema` parameter of the tool.
 
-Tabel sensitif (gaji, password, data pribadi) cukup **tidak di-GRANT**. Dengan begitu Claude memang tidak bisa melihatnya.
+For sensitive tables (salaries, passwords, personal data), simply **don't GRANT** access. That way Claude genuinely cannot see them.
 
-## Menjalankan test
+## Running the tests
 
 ```bash
 pip install pytest
@@ -134,12 +136,12 @@ python -m pytest -q tests/
 TEST_PG_URL="postgresql+psycopg://user@host:5432/db" python -m pytest -q tests/
 ```
 
-## Status pengujian
+## Test status
 
-- **SQLite & PostgreSQL 16** sudah diuji end-to-end lewat protokol MCP: query, batas baris, timeout, explain, penolakan query, dan audit log. Ada juga test bahwa sesi PostgreSQL tetap menolak `DELETE` walaupun validator dilewati dan user-nya superuser.
-- **MySQL, SQL Server, Oracle:** validator SQL-nya sudah diuji, tapi belum dicoba ke server sungguhan. Coba dulu di database non-produksi.
-- Kompatibel dengan MCP Python SDK 1.x dan 2.x.
+- **SQLite & PostgreSQL 16** have been tested end-to-end over the MCP protocol: queries, row limits, timeouts, explain, query rejection, and the audit log. There is also a test showing that a PostgreSQL session still rejects `DELETE` even when the validator is bypassed and the user is a superuser.
+- **MySQL, SQL Server, Oracle:** the SQL validator is tested, but they have not yet been tried against a real server. Try them on a non-production database first.
+- Compatible with MCP Python SDK 1.x and 2.x.
 
-## Lisensi
+## License
 
-MIT — lihat [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
