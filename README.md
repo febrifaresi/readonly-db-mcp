@@ -139,3 +139,7 @@ TEST_PG_URL="postgresql+psycopg://user@host:5432/db" python -m pytest -q tests/
 - **SQLite & PostgreSQL 16** sudah diuji end-to-end lewat protokol MCP: query, batas baris, timeout, explain, penolakan query, dan audit log. Ada juga test bahwa sesi PostgreSQL tetap menolak `DELETE` walaupun validator dilewati dan user-nya superuser.
 - **MySQL, SQL Server, Oracle:** validator SQL-nya sudah diuji, tapi belum dicoba ke server sungguhan. Coba dulu di database non-produksi.
 - Kompatibel dengan MCP Python SDK 1.x dan 2.x.
+
+## Lisensi
+
+MIT — lihat [LICENSE](LICENSE).
