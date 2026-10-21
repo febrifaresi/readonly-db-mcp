@@ -68,29 +68,29 @@ def validate_select(sql: str, db_type: str) -> str:
     """Kembalikan SQL (tanpa ; di akhir) jika aman, atau raise UnsafeQuery."""
     sql = (sql or "").strip().rstrip(";").strip()
     if not sql:
-        raise UnsafeQuery("SQL kosong.")
+        raise UnsafeQuery("Empty SQL.")
     if _ORACLE_PKG.search(sql) or _WAITFOR.search(sql):
-        raise UnsafeQuery("Pemanggilan paket DBMS_/UTL_ atau WAITFOR tidak diizinkan.")
+        raise UnsafeQuery("Calls to DBMS_/UTL_ packages or WAITFOR are not allowed.")
 
     dialect = DIALECTS[db_type]
     try:
         statements = [s for s in sqlglot.parse(sql, read=dialect) if s is not None]
     except Exception as e:  # parse gagal -> tolak (fail-closed)
-        raise UnsafeQuery(f"SQL tidak bisa divalidasi (parse error): {e}") from None
+        raise UnsafeQuery(f"SQL could not be validated (parse error): {e}") from None
 
     if len(statements) != 1:
-        raise UnsafeQuery("Hanya boleh satu statement per panggilan.")
+        raise UnsafeQuery("Only one statement per call is allowed.")
     tree = statements[0]
 
     root = tree.this if isinstance(tree, exp.Subquery) else tree
     if not isinstance(root, (exp.Select, exp.SetOperation)):
-        raise UnsafeQuery(f"Hanya SELECT yang diizinkan (terdeteksi: {type(root).__name__}).")
+        raise UnsafeQuery(f"Only SELECT is allowed (detected: {type(root).__name__}).")
 
     for node in tree.walk():
         if isinstance(node, _FORBIDDEN_NODES):
-            raise UnsafeQuery(f"Bagian query tidak diizinkan: {type(node).__name__}.")
+            raise UnsafeQuery(f"Query part not allowed: {type(node).__name__}.")
         if isinstance(node, exp.Func):
             name = _func_name(node)
             if name in _FORBIDDEN_FUNCS or name.startswith(_FORBIDDEN_FUNC_PREFIXES):
-                raise UnsafeQuery(f"Fungsi '{name}' tidak diizinkan.")
+                raise UnsafeQuery(f"Function '{name}' is not allowed.")
     return sql

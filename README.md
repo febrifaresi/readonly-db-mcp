@@ -34,7 +34,7 @@ A **read-only** MCP server for PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, an
 4. **Always ROLLBACK.** There is also a query timeout (30 seconds by default), a row limit (500 by default), and long text values are truncated.
 5. **Audit log.** Every query, including rejected ones, is logged to `audit.log` in JSON Lines format.
 
-> Note: tool descriptions and error messages from the server are currently in Indonesian.
+> Note: code comments are currently in Indonesian.
 
 ## Quick install (Windows)
 

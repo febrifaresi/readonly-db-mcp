@@ -57,7 +57,7 @@ _IDENT = re.compile(r"^[A-Za-z0-9_$#@ .\-]{1,128}$")
 
 for _name, _c in CONNECTIONS.items():
     if _c.get("type") not in SUPPORTED:
-        raise SystemExit(f"Koneksi '{_name}': type harus salah satu dari {sorted(SUPPORTED)}")
+        raise SystemExit(f"Connection '{_name}': type must be one of {sorted(SUPPORTED)}")
 
 mcp = _Server("readonly-db")
 _RO = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True)
@@ -69,19 +69,19 @@ def _url_for(name: str, c: dict) -> str:
     if c["type"] == "sqlite":
         path = Path(c["path"]).expanduser().resolve()
         if not path.exists():
-            raise ValueError(f"File SQLite tidak ditemukan: {path}")
+            raise ValueError(f"SQLite file not found: {path}")
         # mode=ro -> file dibuka read-only oleh SQLite sendiri
         return f"sqlite:///file:{path}?mode=ro&uri=true"
     env = c.get("url_env")
     url = os.environ.get(env or "")
     if not url:
-        raise ValueError(f"Koneksi '{name}': environment variable '{env}' belum diisi (lihat .env).")
+        raise ValueError(f"Connection '{name}': environment variable '{env}' is not set (see .env).")
     return url
 
 
 def _engine(name: str) -> Engine:
     if name not in CONNECTIONS:
-        raise ValueError(f"Koneksi '{name}' tidak ada. Pakai list_connections untuk melihat daftar.")
+        raise ValueError(f"Connection '{name}' does not exist. Use list_connections to see the list.")
     if name in _engines:
         return _engines[name]
 
@@ -184,14 +184,14 @@ def _err(e: Exception) -> str:
 
 def _ident(value: str | None, what: str) -> str | None:
     if value is not None and not _IDENT.match(value):
-        raise ValueError(f"Nama {what} tidak valid: {value!r}")
+        raise ValueError(f"Invalid {what} name: {value!r}")
     return value
 
 
 # ---------------------------------------------------------------- tools
 @mcp.tool(annotations=_RO)
 def list_connections() -> list[dict]:
-    """Daftar koneksi database yang boleh dipakai (tanpa kredensial)."""
+    """List the database connections that may be used (no credentials)."""
     return [
         {"name": n, "type": c["type"], "description": c.get("description", "")}
         for n, c in CONNECTIONS.items()
@@ -200,13 +200,13 @@ def list_connections() -> list[dict]:
 
 @mcp.tool(annotations=_RO)
 def list_schemas(connection: str) -> list[str]:
-    """Daftar schema/database pada sebuah koneksi."""
+    """List the schemas/databases of a connection."""
     return inspect(_engine(connection)).get_schema_names()
 
 
 @mcp.tool(annotations=_RO)
 def list_tables(connection: str, schema: str | None = None) -> dict:
-    """Daftar tabel dan view. Jika schema kosong, pakai schema default koneksi."""
+    """List tables and views. If schema is empty, the connection's default schema is used."""
     _ident(schema, "schema")
     insp = inspect(_engine(connection))
     return {
@@ -218,8 +218,8 @@ def list_tables(connection: str, schema: str | None = None) -> dict:
 
 @mcp.tool(annotations=_RO)
 def describe_table(connection: str, table: str, schema: str | None = None) -> dict:
-    """Struktur tabel: kolom, primary key, foreign key, index."""
-    _ident(table, "tabel")
+    """Table structure: columns, primary key, foreign keys, indexes."""
+    _ident(table, "table")
     _ident(schema, "schema")
     insp = inspect(_engine(connection))
     cols = [
@@ -239,24 +239,24 @@ def describe_table(connection: str, table: str, schema: str | None = None) -> di
         try:
             out[key] = json.loads(json.dumps(fn(table, schema=schema), default=str))
         except Exception as e:
-            out[key] = f"tidak tersedia: {_err(e)}"
+            out[key] = f"not available: {_err(e)}"
     return out
 
 
 @mcp.tool(annotations=_RO)
 def run_query(connection: str, sql: str, max_rows: int | None = None) -> dict:
-    """Jalankan SATU query SELECT (read-only). Query lain akan ditolak.
+    """Run ONE SELECT query (read-only). Any other query is rejected.
 
-    Hasil dibatasi max_rows (default & maksimum diatur di connections.toml).
-    Field 'truncated' = true berarti masih ada baris lain yang tidak ditampilkan;
-    persempit dengan WHERE / agregasi bila perlu.
+    Results are limited to max_rows (default & maximum are set in connections.toml).
+    'truncated' = true means there are more rows that were not returned;
+    narrow the query with WHERE / aggregation if needed.
     """
     db = CONNECTIONS.get(connection, {}).get("type")
     limit = max(1, min(int(max_rows or MAX_ROWS), MAX_ROWS))
     t0 = time.monotonic()
     try:
         if db is None:
-            raise ValueError(f"Koneksi '{connection}' tidak ada.")
+            raise ValueError(f"Connection '{connection}' does not exist.")
         safe_sql = validate_select(sql, db)
         with _engine(connection).connect() as conn:
             try:
@@ -277,7 +277,7 @@ def run_query(connection: str, sql: str, max_rows: int | None = None) -> dict:
                 "truncated": truncated, "max_rows": limit, "elapsed_ms": elapsed}
     except UnsafeQuery as e:
         _audit(tool="run_query", connection=connection, sql=sql, ok=False, blocked=True, error=str(e))
-        return {"error": f"Ditolak: {e}"}
+        return {"error": f"Rejected: {e}"}
     except Exception as e:
         _audit(tool="run_query", connection=connection, sql=sql, ok=False, error=_err(e))
         return {"error": _err(e)}
@@ -285,13 +285,13 @@ def run_query(connection: str, sql: str, max_rows: int | None = None) -> dict:
 
 @mcp.tool(annotations=_RO)
 def explain_query(connection: str, sql: str) -> dict:
-    """Tampilkan rencana eksekusi (query plan) sebuah SELECT TANPA menjalankannya."""
+    """Show the execution plan (query plan) of a SELECT WITHOUT running it."""
     db = CONNECTIONS.get(connection, {}).get("type")
     try:
         if db is None:
-            raise ValueError(f"Koneksi '{connection}' tidak ada.")
+            raise ValueError(f"Connection '{connection}' does not exist.")
         if db == "oracle":
-            return {"error": "EXPLAIN PLAN di Oracle menulis ke PLAN_TABLE, jadi tidak disediakan di mode read-only."}
+            return {"error": "EXPLAIN PLAN on Oracle writes to PLAN_TABLE, so it is not available in read-only mode."}
         safe_sql = validate_select(sql, db)
         with _engine(connection).connect() as conn:
             try:
@@ -312,7 +312,7 @@ def explain_query(connection: str, sql: str) -> dict:
         return {"plan": plan}
     except UnsafeQuery as e:
         _audit(tool="explain_query", connection=connection, sql=sql, ok=False, blocked=True, error=str(e))
-        return {"error": f"Ditolak: {e}"}
+        return {"error": f"Rejected: {e}"}
     except Exception as e:
         _audit(tool="explain_query", connection=connection, sql=sql, ok=False, error=_err(e))
         return {"error": _err(e)}

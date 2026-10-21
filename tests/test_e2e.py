@@ -51,7 +51,7 @@ def test_sqlite_flow(cfg):
     assert [c["name"] for c in d["columns"]] == ["id", "name", "price"]
     r = call(cfg, "run_query", connection="lite", sql="select * from products order by id")
     assert r["row_count"] == 20 and r["truncated"] is True
-    assert "Ditolak" in call(cfg, "run_query", connection="lite", sql="delete from products")["error"]
+    assert "Rejected" in call(cfg, "run_query", connection="lite", sql="delete from products")["error"]
     assert "plan" in call(cfg, "explain_query", connection="lite", sql="select * from products where id=3")
     # timeout: query rekursif berat harus dihentikan
     slow = "with recursive c(x) as (select 1 union all select x+1 from c) select max(x) from c"
@@ -63,7 +63,7 @@ def test_sqlite_flow(cfg):
 def test_postgres_flow(cfg):
     r = call(cfg, "run_query", connection="pg", sql="select id, name, joined from customers order by id")
     assert r["row_count"] == 20 and r["truncated"] and r["rows"][0] == [1, "cust1", "2026-01-02"]
-    assert "Ditolak" in call(cfg, "run_query", connection="pg", sql="select nextval('s1')")["error"]
+    assert "Rejected" in call(cfg, "run_query", connection="pg", sql="select nextval('s1')")["error"]
     assert "error" in call(cfg, "run_query", connection="pg", sql="select pg_sleep(0.1) from customers")
     # timeout di sisi database (statement_timeout = 3 detik)
     heavy = "select count(*) from generate_series(1,1) a, generate_series(1,100000000) b"
